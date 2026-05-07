@@ -1,30 +1,66 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
+import validator from "validator";
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
-const userSchema = new mongoose.Schema({
-    fullname: {
-        type: String,
-        required: true,
-        trim: true
+const usersSchema = new mongoose.Schema(
+    {
+        fullname: {
+            type: String,
+            required: [true, "Fullname is required"],
+            lowercase: true,
+        },
+        email: {
+            type: String,
+            required: [true, "Email is required"],
+            unique: true,
+            lowercase: true,
+            validate: [validator.isEmail, "Please provide email with valid form"]
+        },
+        password: {
+            type: String,
+            required: [true, "Password is required"],
+            minlength: 6,
+            maxLength: 12,
+            trim: true,
+            select: false
+        },
+        role: {
+            type: String,
+            default: "user",
+            enum: ["user", "admin"]
+        },
+        isActive: {
+            type: Boolean,
+            default: true
+        },
+        isVerified: {
+            type: Boolean,
+            default: false
+        },
+        verificationCode: String
     },
-    email: {
-        type: String,
-        required: true,
-        unique: true,
-        lowercase: true
-    },
-    password: {
-        type: String,
-        required: true
-    },
-    role: {
-        type: String,
-        enum: ['user', 'admin'],
-        default: 'user'
+    {
+        timestamps: true
     }
-    }, {
-    timestamps: true
+);
+usersSchema.pre("save", async function () {
+    if (!this.isModified("password")) return;
+    this.password = await bcrypt.hash(this.password, 10);
 });
+usersSchema.methods.createEmailVerificationToken = function() {
+    const code = crypto.randomBytes(12).toString("hex");
+    this.verificationCode = code;
+    return code;
+};
+usersSchema.methods.signToken = function() {
+    return jwt.sign({id: this._id}, process.env.JWT_SECRET, {expiresIn: process.env.JWT_EXPIRES_IN})
+};
+usersSchema.methods.comparePassword = async function(candidatePassword) {
+    return await bcrypt.compare(candidatePassword, this.password)
+};
 
-const User = mongoose.model('User', userSchema);
+const Users = mongoose.model("Users", usersSchema);
 
-module.exports = User;
+export default Users;

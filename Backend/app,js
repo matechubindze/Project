@@ -1,7 +1,5 @@
 import express from "express";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
-import morgan from "morgan";
 import phonesRouter from "./Router/phones.route.js";
 import globalErrorHandler from "./Controllers/error.controller.js";
 
