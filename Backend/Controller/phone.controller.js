@@ -1,5 +1,7 @@
+// Utilities
 import AppError from "../Utils/AppError.js";
 import catchAsync from "../Utils/catchAsync.js";
+import { deleteImage, imageUpload } from "../Utils/image.js";
 import Phones from "../models/phones.model.js";
 
 export const getAllPhones = catchAsync(async (req, res, next) => {
@@ -25,7 +27,18 @@ export const getSinglePhone = catchAsync(async (req, res, next) => {
 });
 
 export const addPhone = catchAsync(async (req, res, next) => {
-    const newPhone = await Phones.create(req.body)
+    const body = req.body;
+    const images = req.files.map(file => file.path);
+
+    const result = await imageUpload("phones", images);
+    const imageUrls = result.map(img => ({
+        url: img.secure_url,
+        public_id: img.public_id
+    }));
+
+    body.images = imageUrls;
+
+    const newPhone = await Phones.create(body);
 
     return res.status(200).json(newPhone);
 });
@@ -43,16 +56,14 @@ export const editPhone = catchAsync(async (req, res, next) => {
 
 export const deletePhone = catchAsync(async (req, res, next) => {
     const {id} = req.params;
+    const deletedPhone = await Phones.findByIdAndDelete(id);
 
-    let allPhones = await ReadFile(process.env.PHONES_DB);
-    const foundPhone = allPhones.filter(item => item.id === id);
+    if (deletedPhone === null) {
+        return next(new AppError("Phone not found to delete!", 404))
+    }
 
-    if (foundPhone.length === 0) {
-        return next(new AppError(`Phone not found with id: ${id}`, 404))
-    };
-
-    allPhones = allPhones.filter(item => item.id !== id);
-    await WriteFile(process.env.PHONES_DB, allPhones)
+    const promises = deletedPhone.images.map(img => deleteImage(img.public_id))
+    const result = await Promise.all(promises);
 
     return res.status(204).json()
 })
